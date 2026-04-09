@@ -170,7 +170,7 @@ async def start_process(
     body: dict[str, Any] = {}
     if items:
         body["workItems"] = items
-    data = await _api_post(f"/workspaces/{ws}/processes/{process_id}/runs", body)
+    data = await _api_post(f"/workspaces/{ws}/processes/{process_id}/process-runs", body)
     return json.dumps(data, indent=2)
 
 
@@ -192,8 +192,8 @@ async def list_process_runs(
     """
     ws = _ws(workspace_id)
     data = await _api_get(
-        f"/workspaces/{ws}/processes/{process_id}/process-runs",
-        params={"limit": limit},
+        f"/workspaces/{ws}/process-runs",
+        params={"process_id": process_id, "limit": limit},
     )
     return json.dumps(data, indent=2)
 
@@ -201,7 +201,6 @@ async def list_process_runs(
 # ── 5. GET PROCESS RUN STATUS ─────────────────────────────────────────────
 @mcp.tool()
 async def get_process_run(
-    process_id: str,
     run_id: str,
     workspace_id: str = "",
 ) -> str:
@@ -210,13 +209,12 @@ async def get_process_run(
     Use this to check if a run is still in progress, completed, or failed.
 
     Args:
-        process_id: The ID of the process.
         run_id: The ID of the process run.
         workspace_id: Optional workspace ID (uses default from env if empty).
     """
     ws = _ws(workspace_id)
     data = await _api_get(
-        f"/workspaces/{ws}/processes/{process_id}/process-runs/{run_id}"
+        f"/workspaces/{ws}/process-runs/{run_id}"
     )
     return json.dumps(data, indent=2)
 
@@ -224,8 +222,9 @@ async def get_process_run(
 # ── 6. STOP (CANCEL) A PROCESS RUN ────────────────────────────────────────
 @mcp.tool()
 async def stop_process_run(
-    process_id: str,
     run_id: str,
+    set_remaining_work_items_as_done: bool = False,
+    terminate_ongoing_activity_runs: bool = False,
     workspace_id: str = "",
 ) -> str:
     """Stop (cancel) a running process run.
@@ -233,13 +232,18 @@ async def stop_process_run(
     Sends a cancellation request for the given process run.
 
     Args:
-        process_id: The ID of the process.
         run_id: The ID of the process run to cancel.
+        set_remaining_work_items_as_done: Mark remaining work items as done (default False).
+        terminate_ongoing_activity_runs: Terminate ongoing activity runs (default False).
         workspace_id: Optional workspace ID (uses default from env if empty).
     """
     ws = _ws(workspace_id)
+    body = {
+        "set_remaining_work_items_as_done": set_remaining_work_items_as_done,
+        "terminate_ongoing_activity_runs": terminate_ongoing_activity_runs,
+    }
     data = await _api_post(
-        f"/workspaces/{ws}/processes/{process_id}/process-runs/{run_id}/stop"
+        f"/workspaces/{ws}/process-runs/{run_id}/stop", body
     )
     return json.dumps(data, indent=2)
 
@@ -280,8 +284,8 @@ async def list_work_items(
     """
     ws = _ws(workspace_id)
     data = await _api_get(
-        f"/workspaces/{ws}/processes/{process_id}/process-runs/{run_id}/work-items",
-        params={"limit": limit},
+        f"/workspaces/{ws}/work-items",
+        params={"process_id": process_id, "process_run_id": run_id, "limit": limit},
     )
     return json.dumps(data, indent=2)
 
@@ -297,15 +301,15 @@ async def retry_work_items(
     Sends a batch retry request for the specified work item IDs.
 
     Args:
-        work_item_ids: JSON array of work item IDs to retry,
-                       e.g. '["wi_abc123", "wi_def456"]'.
+        work_item_ids: Comma-separated work item IDs to retry,
+                       e.g. 'id1,id2,id3' or a single ID 'id1'.
         workspace_id: Optional workspace ID (uses default from env if empty).
     """
     ws = _ws(workspace_id)
-    ids = json.loads(work_item_ids)
+    ids = [wid.strip() for wid in work_item_ids.split(",") if wid.strip()]
     body = {
-        "operation": "retry",
-        "workItemIds": ids,
+        "batch_operation": "retry",
+        "work_item_ids": ids,
     }
     data = await _api_post(f"/workspaces/{ws}/work-items/batch", body)
     return json.dumps(data, indent=2)
@@ -314,7 +318,6 @@ async def retry_work_items(
 # ── 10. LIST STEP RUNS ────────────────────────────────────────────────────
 @mcp.tool()
 async def list_step_runs(
-    process_id: str,
     run_id: str,
     workspace_id: str = "",
 ) -> str:
@@ -324,13 +327,13 @@ async def list_step_runs(
     state, worker used, duration, and any errors.
 
     Args:
-        process_id: The ID of the process.
         run_id: The ID of the process run.
         workspace_id: Optional workspace ID (uses default from env if empty).
     """
     ws = _ws(workspace_id)
     data = await _api_get(
-        f"/workspaces/{ws}/processes/{process_id}/process-runs/{run_id}/step-runs"
+        f"/workspaces/{ws}/step-runs",
+        params={"process_run_id": run_id},
     )
     return json.dumps(data, indent=2)
 
@@ -338,8 +341,6 @@ async def list_step_runs(
 # ── 11. GET STEP RUN ARTIFACTS ─────────────────────────────────────────────
 @mcp.tool()
 async def list_step_run_artifacts(
-    process_id: str,
-    run_id: str,
     step_run_id: str,
     workspace_id: str = "",
 ) -> str:
@@ -348,15 +349,12 @@ async def list_step_run_artifacts(
     Returns artifact IDs, filenames, and sizes.
 
     Args:
-        process_id: The ID of the process.
-        run_id: The ID of the process run.
         step_run_id: The ID of the step run.
         workspace_id: Optional workspace ID (uses default from env if empty).
     """
     ws = _ws(workspace_id)
     data = await _api_get(
-        f"/workspaces/{ws}/processes/{process_id}/process-runs/{run_id}"
-        f"/step-runs/{step_run_id}/artifacts"
+        f"/workspaces/{ws}/step-runs/{step_run_id}/artifacts"
     )
     return json.dumps(data, indent=2)
 
